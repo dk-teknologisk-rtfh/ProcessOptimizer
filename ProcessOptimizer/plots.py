@@ -440,16 +440,19 @@ def dependence(
         yi, yi_transformed = _evenly_sample(space.dimensions[i], n_points)
 
         zi = []
+        stddevs = []
         for x_ in xi_transformed:
             row = []
             for y_ in yi_transformed:
                 rvs_ = np.array(sample_points)  # copy
                 rvs_[:, dim_locs[j] : dim_locs[j + 1]] = x_
                 rvs_[:, dim_locs[i] : dim_locs[i + 1]] = y_
-                row.append(np.mean(model.predict(rvs_)))
+                funcvalue, stddev = model.predict(rvs_, return_std = True)
+                row.append(np.mean(funcvalue))
             zi.append(row)
+            stddevs.append(np.mean(stddev))
 
-        return xi, yi, np.array(zi).T
+        return xi, yi, np.array(zi).T, stddevs
 
 
 def plot_objective(
@@ -656,17 +659,17 @@ def plot_objective(
 
             # lower triangle
             else:
-                xi, yi, zi = dependence(
+                xi, yi, zi, stddevs = dependence(
                     space,
                     result.models[-1],
                     i,
                     j,
                     rvs_transformed,
-                    n_points,
+                    n_points=n_points,
                     x_eval=x_eval,
                 )
                 # print('filling with i, j = ' + str(i) + str(j))
-                row.append({"xi": xi, "yi": yi, "zi": zi})
+                row.append({"xi": xi, "yi": yi, "zi": zi, "std": stddevs})
 
                 if np.min(zi) < val_min_2d:
                     val_min_2d = np.min(zi)
@@ -707,6 +710,7 @@ def plot_objective(
                 xi = plots_data[i][j]["xi"]
                 yi = plots_data[i][j]["yi"]
                 zi = plots_data[i][j]["zi"]
+                stddev = plots_data[i][j]["std"]
 
                 ax[i, j].contourf(
                     xi,
@@ -717,11 +721,18 @@ def plot_objective(
                     cmap="viridis_r",
                     vmin=val_min_2d,
                     vmax=val_max_2d,
+                    alpha=1 #(stddev-np.abs(val_min_2d))/(np.abs(val_max_2d)-np.abs(val_min_2d))
                 )
                 ax[i, j].scatter(
                     samples[:, j], samples[:, i], c="darkorange", s=10, lw=0.0, zorder=10, clip_on=False
                 )
                 ax[i, j].scatter(minimum[j], minimum[i], c=["r"], s=20, lw=0.0, zorder=10, clip_on=False)
+
+                #greys = np.full((xi, yi, 3), 70)
+                ax[i, j].imshow(np.ones(shape=(len(xi),len(yi))),
+                                cmap='gray',
+                                alpha=0.1,#(stddev-np.abs(val_min_2d))/(np.abs(val_max_2d)-np.abs(val_min_2d)),
+                                )#extent=(0,1,0,1))#(min(xi), max(xi), min(yi), max(yi)))
 
                 if [i, j] == [1, 0]:
                     import matplotlib as mpl
