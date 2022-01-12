@@ -924,8 +924,17 @@ def _cat_format(dimension, x, _):
     return str(dimension.categories[int(x)])
 
 
+# Metode til at finde hvor meget af y-aksen vi bruger
+def y_mag(res,x_loc):
+    y_mag = np.zeros(len(x_loc))
+    for i in range(len(x_loc)):
+        y = dependence(res.space,res.models[-1],i,x_eval=x_loc)
+        y = np.array(y[1])
+        y_mag[i] = y.max() - y.min()
+    return y_mag
+
 def plot_expected_minimum_convergence(
-    result, figsize=(15, 15), random_state=None, sigma=0.5
+    result, n_init=1,figsize=(15, 15), random_state=None, sigma=0.5
 ):
     """
     A function to perform a retrospective analysis of all the data points by
@@ -936,12 +945,17 @@ def plot_expected_minimum_convergence(
     slow. TODO: Consider allowing user to subselect in data, to e.g. perform
     the analysis using every n-th datapoint, or only performing the analysis
     for the last n datapoints.
+
+    n_init = number of initial experiments. Assumes at least one experiment, 
+    hence the first point in the graph is always the result of the first 
+    suggested experiment.
     """
 
     estimated_mins_x = []
     estimated_mins_y = []
     quants_list = []
     distances = []
+    y_span =[]
     for i in range(len(result.x_iters)):
         # Build an optimizer with as close to those used during the data
         # generating as possible. TODO: add more details on the optimizer build
@@ -991,23 +1005,73 @@ def plot_expected_minimum_convergence(
             [i[0] for i in quants_list], sigma=sigma
         )
 
+        #Build vector for normalized EM plot. 
+        if i >= n_init:
+            y_span += [y_mag(result,_exp[0])]
+            
+
+    #calculte error bars
+    upper_err=[abs(quant_max_smooth[i] - estimated_mins_y[i]) for i in range(0, len(result.x_iters))]
+    lower_err=[abs(quant_min_smooth[i] - estimated_mins_y[i]) for i in range(0, len(result.x_iters))]
+    
+
+    # Vi kan nu beregne en vægtet metrik for hvor meget minimum har flyttet sig, 
+
+    # Vi starter med at normalisere positionen af vores expected minimum langs vores akser
+    em_loc_norm = result.space.transform(estimated_mins_x[n_init+1:])
+    # Beregn nu ændringen langs hver akse for hvert skridt
+    diff = np.diff(em_loc_norm,axis=0)
+    # Lav en vægtet sum af de kvadrerede ændringer, med den nyeste y_span som vægte
+    em_change_sum = np.sum(np.square(diff)*y_span[-1],axis=1)
+    # Beregn bevægelsen ved at tage kvadratroden af den vægtede sum
+    em_change = np.sqrt(em_change_sum)
+
+    
+
+
     # Do the actual plotting
     fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True, figsize=figsize)
-    ax1.fill_between(
-        list(range(1, len(result.x_iters) + 1)),
-        y1=quant_min_smooth,
-        y2=quant_max_smooth,
-        alpha=0.5,
-        color="grey",
+    # ax1.fill_between(
+    #     list(range(1, len(result.x_iters) + 1)),
+    #     y1=quant_min_smooth,
+    #     y2=quant_max_smooth,
+    #     alpha=0.5,
+    #     color="grey",
+    # )
+    # ax1.plot(list(range(1, len(result.x_iters) + 1)), estimated_mins_y)
+    
+    ax1.errorbar(
+        list(range(n_init+1, len(result.x_iters)+1)), estimated_mins_y[n_init: len(result.x_iters)+1],
+        yerr=[lower_err[n_init:], upper_err[n_init:]],
+        fmt='s',
+        capsize=4
     )
-    ax1.plot(list(range(1, len(result.x_iters) + 1)), estimated_mins_y)
+
     ax1.set_ylabel('expected "y"-value @ expected min')
 
-    ax2.plot(list(range(1, len(result.x_iters) + 1)), distances)
-    ax2.set_ylabel("euclidian distance in x space from previous expected min")
-    ax2.set_xticks(list(range(1, len(result.x_iters) + 1)))
+    
+    #%% Plot af bevægelse af expected minimum
 
-    plt.xlabel("Number of calls $n$")
+    
+    ax2.plot(range(n_init+1,len(em_change)+n_init+1),em_change)
+    ax2.set_xlabel("Experiment number")
+    ax2.set_ylabel("Weighted movement of EM")
+    ax2.set_ylim(0,2.5)
+    print(len(em_change))
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    #ax2.plot(list(range(n_init+1, len(result.x_iters) + 1)), distances[n_init:])
+    #ax2.set_ylabel("euclidian distance in x space from previous expected min")
+    #ax2.set_xticks(list(range(n_init+1, len(result.x_iters) + 1)))
+
+    # plt.xlabel("Number of calls $n$")
     return fig
 
 

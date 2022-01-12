@@ -5,6 +5,7 @@
 src/*
 build/
 dist/
+venv/
 *.egg-info/
 .idea/
 .cache/
