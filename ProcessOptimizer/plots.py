@@ -956,6 +956,7 @@ def plot_expected_minimum_convergence(
     quants_list = []
     distances = []
     y_span =[]
+    print('length of result ', len(result.x_iters))
     for i in range(len(result.x_iters)):
         # Build an optimizer with as close to those used during the data
         # generating as possible. TODO: add more details on the optimizer build
@@ -1018,13 +1019,19 @@ def plot_expected_minimum_convergence(
     # Vi kan nu beregne en vægtet metrik for hvor meget minimum har flyttet sig, 
 
     # Vi starter med at normalisere positionen af vores expected minimum langs vores akser
-    em_loc_norm = result.space.transform(estimated_mins_x[n_init+1:])
+    # OBS: Første estimat er inden vi tilføjer nye målinger
+    print('length of estimated_mins_x ', len(estimated_mins_x))
+    em_loc_norm = result.space.transform(estimated_mins_x[n_init:])
+    print('length of em_loc_norm ', len(em_loc_norm))
     # Beregn nu ændringen langs hver akse for hvert skridt
     diff = np.diff(em_loc_norm,axis=0)
+    print('length of diff ', len(diff))
     # Lav en vægtet sum af de kvadrerede ændringer, med den nyeste y_span som vægte
     em_change_sum = np.sum(np.square(diff)*y_span[-1],axis=1)
+    print('length of em_change_sum ', len(em_change_sum))
     # Beregn bevægelsen ved at tage kvadratroden af den vægtede sum
     em_change = np.sqrt(em_change_sum)
+    print('length of em_change ', len(em_change))
 
     
 
@@ -1057,7 +1064,6 @@ def plot_expected_minimum_convergence(
     ax2.set_xlabel("Experiment number")
     ax2.set_ylabel("Weighted movement of EM")
     ax2.set_ylim(0,2.5)
-    print(len(em_change))
     
     
     
