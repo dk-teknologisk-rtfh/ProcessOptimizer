@@ -1019,9 +1019,8 @@ def plot_expected_minimum_convergence(
     # Vi kan nu beregne en vægtet metrik for hvor meget minimum har flyttet sig, 
 
     # Vi starter med at normalisere positionen af vores expected minimum langs vores akser
-    # OBS: Første estimat er inden vi tilføjer nye målinger
-    print('length of estimated_mins_x ', len(estimated_mins_x))
-    em_loc_norm = result.space.transform(estimated_mins_x[n_init:])
+    # OBS: Første estimat er INDEN vi tilføjer nye målinger
+    em_loc_norm = result.space.transform(estimated_mins_x[n_init-1:])
     print('length of em_loc_norm ', len(em_loc_norm))
     # Beregn nu ændringen langs hver akse for hvert skridt
     diff = np.diff(em_loc_norm,axis=0)
@@ -1078,7 +1077,7 @@ def plot_expected_minimum_convergence(
     #ax2.set_xticks(list(range(n_init+1, len(result.x_iters) + 1)))
 
     # plt.xlabel("Number of calls $n$")
-    return fig
+    return fig, estimated_mins_x
 
 
 def plot_Pareto(
