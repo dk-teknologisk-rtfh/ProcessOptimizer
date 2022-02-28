@@ -382,9 +382,11 @@ def dependence(
 
     * `xi`: [np.array]:
         The points at which the partial dependence was evaluated.
-
     * `yi`: [np.array]:
         The value of the model at each point `xi`.
+    * `stddevs`: [np.array]:
+        The standard deviation of the model at each point `xi`.
+
 
     For 2D partial dependence:
 
@@ -432,7 +434,10 @@ def dependence(
             funcvalue, stddev = model.predict(rvs_, return_std = True)
             yi.append(np.mean(funcvalue))
             stddevs.append(np.mean(stddev))
-
+        # Convert yi and stddevs from lists to numpy arrays
+        yi = np.array(yi)
+        stddevs = np.array(stddevs)
+        
         return xi, yi, stddevs
 
     else:
@@ -506,7 +511,8 @@ def plot_objective(
     * `dimensions` [list of str, default=None] Labels of the dimension
         variables. `None` defaults to `space.dimensions[i].name`, or
         if also `None` to `['X_0', 'X_1', ..]`.
-    * `usepartialdependence` [bool, default=false] Wether to use partial
+
+    * `usepartialdependence` [bool, default=false] Whether to use partial
         dependence or not when calculating dependence. If false plot_objective
         will parse values to the dependence function,
         defined by the pars argument
@@ -523,6 +529,7 @@ def plot_objective(
                 currently does not work with categorical values.
             'expected_minimum_random' - Parameters that gives the best minimum
                 when using naive random sampling. Works with categorical values
+            '[x[0], x[1], ..., x[n]] - Parameter to show depence from a given x
 
     * `expected_minimum_samples` [float, default = None] Determines how many
     points should be evaluated to find the minimum when using
@@ -531,6 +538,9 @@ def plot_objective(
     * `title` [str, default=None]
         String to use as title of the figure
 
+    * `show_confidence` [bool, default=false] Whether or not to show a credible
+        range around the mean estimate on the 1d-plots in the diagonal. The
+        credible range is given as 1.96 times the std in the point.
 
     Returns
     -------
@@ -637,6 +647,7 @@ def plot_objective(
                 # to avoid duplicates.
                 break
 
+            # The diagonal of the plot
             elif i == j:
                 xi, yi, stddevs = dependence(
                     space,
@@ -649,10 +660,19 @@ def plot_objective(
                 )
                 row.append({"xi": xi, "yi": yi, "std": stddevs})
 
-                if np.min(yi) < val_min_1d:
-                    val_min_1d = np.min(yi)
-                if np.max(yi) > val_max_1d:
-                    val_max_1d = np.max(yi)
+                
+                if show_confidence:
+                    yi_low_bound = yi - 1.96 * stddevs
+                    yi_high_bound = yi + 1.96 * stddevs
+                else:
+                    yi_low_bound = yi
+                    yi_high_bound = yi
+                if np.min(yi_low_bound) < val_min_1d:
+                    val_min_1d = np.min(yi_low_bound)
+                if np.max(yi_high_bound) > val_max_1d:
+                    val_max_1d = np.max(yi_high_bound)
+
+
 
             # lower triangle
             else:
@@ -683,6 +703,7 @@ def plot_objective(
                 # to avoid duplicates.
                 break
 
+            # The diagonal of the plot, showing the 1D (partial) dependence for each of the n parameters
             elif i == j:
 
                 xi = plots_data[i][j]["xi"]
@@ -690,16 +711,16 @@ def plot_objective(
                 stddevs = plots_data[i][j]["std"]
 
                 ax[i, i].plot(xi, yi)
-                ax[i, i].set_ylim(val_min_1d, val_max_1d)
+                ax[i, i].set_xlim(np.min(xi), np.max(xi))
+                ax[i, i].set_ylim(val_min_1d-abs(val_min_1d)*.02, val_max_1d+abs(val_max_1d)*.02)
                 ax[i, i].axvline(minimum[i], linestyle="--", color="r", lw=1)
                 if show_confidence:
                     ax[i, i].fill_between(xi, 
-                                          y1=(np.asarray(yi) - 1.96*np.asarray(stddevs)),
-                                          y2=(np.asarray(yi) + 1.96*np.asarray(stddevs)),
+                                          y1=(yi - 1.96*stddevs),
+                                          y2=(yi + 1.96*stddevs),
                                           alpha=0.5,
-                                          color='red')
-                    #ax[i, i].plot(xi, (np.asarray(yi) - 1.96*np.asarray(zi)), color='r', alpha=0.5)
-                    #ax[i, i].plot(xi, (np.asarray(yi) + 1.96*np.asarray(zi)), color='r', alpha=0.5)
+                                          color='red',
+                                          linewidth=0.0)
 
             # lower triangle
             elif i > j:
@@ -739,12 +760,26 @@ def plot_objective(
         ylabel = "Partial dependence"
     else:
         ylabel = "Dependence"
+
     return _format_scatter_plot_axes(
         ax, space, ylabel=ylabel, dim_labels=dimensions
     )
 
 
-def plot_objectives(results, titles=None):
+def plot_objectives(
+    results,
+    levels=10,
+    n_points=40,
+    n_samples=250,
+    size=2,
+    zscale="linear",
+    dimensions=None,
+    usepartialdependence=True,
+    pars="result",
+    expected_minimum_samples=None,
+    titles=None,
+    show_confidence=False
+    ):
     """Pairwise dependence plots of each of the objective functions.
     Parameters
     ----------
@@ -759,11 +794,33 @@ def plot_objectives(results, titles=None):
 
     if titles is None:
         for result in results:
-            plot_objective(result, title=None)
+            plot_objective(result,
+                           levels=levels,
+                           n_points=n_points,
+                           n_samples=n_samples,
+                           size=size,
+                           zscale=zscale,
+                           dimensions=dimensions,
+                           usepartialdependence=usepartialdependence,
+                           pars=pars,
+                           expected_minimum_samples=expected_minimum_samples,
+                           title=None,
+                           show_confidence=show_confidence)
         return
     else:
         for k in range(len(results)):
-            plot_objective(results[k], title=titles[k])
+            plot_objective(results[k], 
+                           levels=levels,
+                           n_points=n_points,
+                           n_samples=n_samples,
+                           size=size,
+                           zscale=zscale,
+                           dimensions=dimensions,
+                           usepartialdependence=usepartialdependence,
+                           pars=pars,
+                           expected_minimum_samples=expected_minimum_samples,
+                           title=titles[k],
+                           show_confidence=show_confidence)
         return
 
 
@@ -942,9 +999,12 @@ def plot_expected_minimum_convergence(
     of the surogate model in the expected minimum together with a measure for
     the variability in the suggested mean value. This code "replays" the
     entire optimization, hence it builds quiet many models and can, thus, seem
+    slow. 
+    TODO: Consider allowing user to subselect in data, to e.g. perform
     slow. TODO: Consider allowing user to subselect in data, to e.g. perform
     the analysis using every n-th datapoint, or only performing the analysis
     for the last n datapoints.
+
 
     n_init = number of initial experiments. Assumes at least one experiment, 
     hence the first point in the graph is always the result of the first 
